@@ -8,26 +8,24 @@ from numpy.linalg import solve
 def Richardson(S,H,m):
     r=len(H)
     P=np.array(range(int(m)+1,int(m)+1+r-1))
-    Ht = np.empty((0, r), dtype=float)
+    Ht = np.empty((0, r), dtype=np.double)
     for i in range(len(H)):
         K=[]
         for j in range(len(P)):
-           K.append(H[i]**P[j])
+            K.append(H[i]**P[j])
         K.append(-1)
-        K=np.array(K)
         Ht = np.append(Ht, [K], axis=0)
     print(Ht)
     C = np.linalg.inv(Ht) @ np.transpose(-np.array(S))
 
-    return [C[0],C[1]]
+    return C[0]
 
 def Richardson(S,H,m,l):
-    d1 = H[0]**(int(m)+1) - H[1]**(int(m)+1)
-    k1 = H[0]**(int(m)+1+1) - H[1]**(int(m)+1+1)
-    d2 = H[1]**(int(m)+1) - H[2]**(int(m)+1)
-    k2 = H[1]**(int(m)+1+1) - H[2]**(int(m)+1+1)
-
-    return (-S[1]+S[2])/d2 - (d2*(-S[0]+S[1]) - S[1]*d1 + S[2]*d1)*k2/(k1-k2*d1)*d2
+    d1 = H[0]**(m) - H[1]**(m)
+    k1 = H[0]**(m+1) - H[1]**(m+1)
+    d2 = H[1]**(m) - H[2]**(m)
+    k2 = H[1]**(m+1) - H[2]**(m+1)
+    return (-S[1]+S[2])/d2 - (d2*(-S[0]+S[1]) - S[1]*d1 + S[2]*d1)*k2/((k1-k2*d1)*d2)
 
 
 
@@ -50,57 +48,55 @@ def compute_n_sums (n,a,b,r):
 def compositeqf(a,b,r,eps):
     p = 1/t**(-3/7)
     M = pmoment(p, a, b, r)
-    N =  np.linspace(a,b,r)
+    N =  np.linspace(a,b,r,dtype=np.double)
     integsum_p = newtonqf(M, N)
-    n=9
+    n=4
     P=148.825
     l=2
     niter=0
     m=1
-    S=[]
-    H=[]
-    Rh=[]
-    Ms=[]
+    S=np.array([],dtype=np.double)
+    H=np.array([],dtype=np.double)
+    Rh=np.array([],dtype=np.double)
+    Ms=np.array([],dtype=np.double)
     C=100
     while (niter<100):
         niter += 1
         print("N_iter=", niter)
         if (len(H)!=0):
             n*=l
-            h=(b-a)/n
-
         h=(b-a)/n
         print("h=", h, " nsteps=", n)
         integsum=compute_n_sums(n,a,b,r)
         print("S=", integsum)
-        S.append(integsum)
-        H.append(h)
+        S=np.append(S,integsum)
+        H=np.append(H,h)
         if (r % 2 == 0):
             Rn = (integsum - integsum_p) / (l ** (r - 1) - 1)
         else:
             Rn = (integsum - integsum_p) / (l ** (r) - 1)
-        Rh.append(Rn)
+        Rh=np.append(Rh,Rn)
         print("Rn=", Rn)
         if len(S)==3:
             mprev = m
             m=Eitken(S,l)
-            Ms.append(m)
+            Ms = np.append(Ms,m)
             ho=hopt(H[1],Rh[1],m,eps)
             if len(Ms) > 2:
-                del Ms[0]
+               Ms=np.delete(Ms,0)
             Cprev = C
             C=Richardson(S,H,m,l)
-            if abs(C-Cprev)<ho:
+            if abs(C-Cprev)<ho and (niter>=3):
                 break;
             print("C=", C)
             n = int((b - a)/ho)
-            print("hopt=",ho, "m=",m, "nsteps=", n)
-            Rh=[]
-            H=[]
-            S=[]
+            print("hopt=",ho, "m=",m, "nsteps=", n, "C=",C)
+            S =np.array([],dtype=np.double)
+            H = np.array([],dtype=np.double)
+            Rh = np.array([],dtype=np.double)
         integsum_p = integsum
 
-    print("S=",compute_n_sums(n,a,b,r),"P=",P,"nsteps=",n, "h=", (b-a)/n)
+    print("S=",compute_n_sums(n,a,b,r),"P=",P,"nsteps=",n, "h=", (b-a)/n, "C=", C)
     if (r % 2 == 0):
         Rn = (integsum - integsum_p) / (l ** (r - 1) - 1)
     else:
@@ -108,24 +104,23 @@ def compositeqf(a,b,r,eps):
     print("Rn=",Rn)
 
 
-def hopt(m,eps,h,l,S1,S2):
-    return h*(eps*(1-l**(-m))/abs(S2-S1))**(1/(int(m)+1))
+#def hopt(m,eps,h,l,S1,S2):
+#    return h*(eps*(1-l**(-m))/abs(S2-S1))**(1/(int(m)+1))
 def hopt(h1,Rh1,m,eps):
-    return h1 * (eps / abs(Rh1)) ** (1 / (abs(int(m)) + 1))
+    return h1 * (eps / abs(Rh1)) ** (1 / (abs(int(m)) +1))
 def pmoment(p, a, b, r):
     # p - weight function
     # r - count
     # a,b - limits
     m = lambda k: (b**(k+10/7))/(k+10/7) - (a**(k+10/7))/(k+10/7)
-    M = np.array(list(map(m,range(0,r))))
+    M = np.array(list(map(m,range(0,r))),dtype=np.double)
     #sp.integrate(p*x**j)
     return M
 
 def newtonqf(M,N):
     #N - nodes
     #M - moments
-    M=M.astype(float)
-    T = np.empty((0,len(N)),dtype=float)
+    T = np.empty((0,len(N)),dtype=np.double)
     for i in range(len(N)):
        T=  np.append(T, [N**i], axis=0)
     A=np.linalg.inv(T)@np.transpose(M)
@@ -200,7 +195,7 @@ def main():
     r = 5
     alpha = 0
     betta = 3 / 7
-    eps=10**(-5)
+    eps=10**(-6)
     p = (x - a) ** (-alpha) * (b - x) ** (-betta)
     pt = 1 / t ** (-3 / 7)
     # lft = lambda t: 2.7 * np.cos(3.5*(4.3-t))*np.exp(-7*(4.3-t)/3) + 4.4 * np.sin(2.5*(4.3-t)) * np.exp(5*(4.3-t)/3) + 2
@@ -208,6 +203,7 @@ def main():
     print(newtonqf(np.array(M), np.linspace(a, b, r)))
     compositeqf(0, 1.5, r,eps)
 
+    #print(gaussqf(M,p,a,b,lft))
 
 
 
